@@ -56,6 +56,12 @@ export const addSubcategory = (
     body: JSON.stringify({ category_id, name }),
   });
 
+export const updateCategory = (
+  id: number,
+  payload: { name: string; icon: string | null },
+): Promise<{ ok: boolean }> =>
+  request(`/categories/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+
 // ── Rules ─────────────────────────────────────────────────────────────────────
 
 export const getRules = (): Promise<Rule[]> => request("/rules");

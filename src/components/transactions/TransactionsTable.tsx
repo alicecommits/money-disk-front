@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Transaction, Category } from "../../types";
+import { CategoryLabel, categoryOptionLabel } from "../categories/CategoryIcon";
 
 interface Props {
   transactions: Transaction[];
@@ -58,12 +59,14 @@ export function TransactionsTable({ transactions, categories, onAssign, maxRows 
                       }}
                     >
                       <option value="">— unassigned —</option>
-                      {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.name}>{categoryOptionLabel(c.icon, c.name)}</option>
+                      ))}
                     </select>
+                  ) : tx.category ? (
+                    <CategoryLabel icon={cat?.icon} name={tx.category} className="text-text-primary" />
                   ) : (
-                    <span className={tx.category ? "text-text-primary" : "text-text-tertiary italic"}>
-                      {tx.category ?? "unassigned"}
-                    </span>
+                    <span className="text-text-tertiary italic">unassigned</span>
                   )}
                 </td>
                 <td className="px-4 py-2">

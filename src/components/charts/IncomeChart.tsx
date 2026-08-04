@@ -3,18 +3,20 @@ import {
 } from "recharts";
 import type { AggregatedData, Scale } from "../../types";
 import { formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
+import { CategoryLabel, categoryOptionLabel } from "../categories/CategoryIcon";
 
 interface Props {
   data: AggregatedData[];
   categoryOrder: string[];
   scale: Scale;
   averageMode: string;
+  categoryIcons: Record<string, string | null>;
 }
 
 // Income uses green-tinted colors
 const INCOME_COLORS = ["#22c55e", "#06b6d4", "#a78bfa", "#f59e0b"];
 
-export function IncomeChart({ data, categoryOrder, scale, averageMode }: Props) {
+export function IncomeChart({ data, categoryOrder, scale, averageMode, categoryIcons }: Props) {
   if (!data.length || data.every((d) => d.value === 0)) {
     return (
       <div className="flex h-48 items-center justify-center text-text-tertiary">
@@ -45,7 +47,7 @@ export function IncomeChart({ data, categoryOrder, scale, averageMode }: Props) 
           label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
         />
         <Tooltip
-          formatter={(v, name) => [formatEuro(Number(v)), String(name)]}
+          formatter={(v, name) => [formatEuro(Number(v)), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
           contentStyle={{
             background: "var(--bg-tertiary)",
             border: "1px solid var(--border-default)",
@@ -55,7 +57,9 @@ export function IncomeChart({ data, categoryOrder, scale, averageMode }: Props) 
         />
         <Legend
           wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
-          formatter={(v) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>}
+          formatter={(v) => (
+            <CategoryLabel icon={categoryIcons[String(v)]} name={String(v)} className="text-text-secondary" />
+          )}
         />
         {categoryOrder.map((cat, i) => (
           <Bar

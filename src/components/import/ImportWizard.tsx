@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import type { Category, ColumnMapping, ProcessedTransaction } from "../../types";
+import { categoryOptionLabel } from "../categories/CategoryIcon";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -391,7 +392,7 @@ export function ResultsEditor({
                     >
                       <option value="">— unassigned —</option>
                       {categories.map((c) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
+                        <option key={c.id} value={c.name}>{categoryOptionLabel(c.icon, c.name)}</option>
                       ))}
                     </select>
                   </td>

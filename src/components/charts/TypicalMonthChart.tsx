@@ -3,13 +3,15 @@ import {
 } from "recharts";
 import type { CategoryTotal } from "../../types";
 import { CHART_COLORS, formatEuro } from "../../lib/aggregation";
+import { CategoryLabel, categoryOptionLabel } from "../categories/CategoryIcon";
 
 interface Props {
   data: CategoryTotal[]; // sorted ascending (smallest first → largest at bottom)
   monthCount: number;
+  categoryIcons: Record<string, string | null>;
 }
 
-export function TypicalMonthChart({ data, monthCount }: Props) {
+export function TypicalMonthChart({ data, monthCount, categoryIcons }: Props) {
   if (!data.length) return null;
 
   const total = data.reduce((s, d) => s + d.amount, 0);
@@ -41,7 +43,7 @@ export function TypicalMonthChart({ data, monthCount }: Props) {
           />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
-            formatter={(v, name) => [formatEuro(Number(v)), String(name)]}
+            formatter={(v, name) => [formatEuro(Number(v)), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
             contentStyle={{
               background: "var(--bg-tertiary)",
               border: "1px solid var(--border-default)",
@@ -50,7 +52,9 @@ export function TypicalMonthChart({ data, monthCount }: Props) {
           />
           <Legend
             wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-            formatter={(v) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>}
+            formatter={(v) => (
+              <CategoryLabel icon={categoryIcons[String(v)]} name={String(v)} className="text-text-secondary" />
+            )}
           />
           {categories.map((cat, i) => (
             <Bar

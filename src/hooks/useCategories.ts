@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { getCategories, getCompensationMap } from "../api/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCategories, getCompensationMap, updateCategory } from "../api/client";
 import type { Category } from "../types";
 import { useMemo } from "react";
 
@@ -8,6 +8,24 @@ export function useCategories() {
     queryKey: ["categories"],
     queryFn: getCategories,
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+/** Flat {categoryName: icon} map — chart legends/tooltips only carry category names, not full Category objects. */
+export function useCategoryIconMap(): Record<string, string | null> {
+  const categoriesQ = useCategories();
+  return useMemo(() => {
+    if (!categoriesQ.data) return {};
+    return Object.fromEntries(categoriesQ.data.map((c) => [c.name, c.icon]));
+  }, [categoriesQ.data]);
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, name, icon }: { id: number; name: string; icon: string | null }) =>
+      updateCategory(id, { name, icon }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
   });
 }
 
@@ -36,10 +54,16 @@ export function useCategoryMaps() {
     );
   }, [compMapQ.data]);
 
+  const categoryIconByName = useMemo<Record<string, string | null>>(() => {
+    if (!categoriesQ.data) return {};
+    return Object.fromEntries(categoriesQ.data.map((c) => [c.name, c.icon]));
+  }, [categoriesQ.data]);
+
   return {
     categoriesLoading: categoriesQ.isLoading || compMapQ.isLoading,
     categories: categoriesQ.data ?? [],
     categoryNames,
+    categoryIconByName,
     compensationMap,
   };
 }

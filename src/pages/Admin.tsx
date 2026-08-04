@@ -3,6 +3,7 @@ import { useCategories } from "../hooks/useCategories";
 import { useImport } from "../hooks/useImport";
 import { TransactionsTable } from "../components/transactions/TransactionsTable";
 import { FileDropzone, PreviewTable, ColumnMapper, ResultsEditor } from "../components/import/ImportWizard";
+import { CategoryIconEditor } from "../components/categories/CategoryIconEditor";
 
 const STEP_LABELS = ["Upload", "Map Columns", "Review", "Done"];
 
@@ -82,6 +83,16 @@ export function Admin() {
             </button>
           </div>
         )}
+      </section>
+
+      <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-medium text-text-primary">Categories</h2>
+          <p className="mt-1 text-sm text-text-tertiary">
+            Paste an emoji to set a category's icon — your OS emoji picker works here too.
+          </p>
+        </div>
+        <CategoryIconEditor categories={categories} />
       </section>
 
       {!txLoading && unassigned.length > 0 && (

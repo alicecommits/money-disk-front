@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRules, createRule, updateRule, deleteRule } from "../api/client";
 import { useCategories } from "../hooks/useCategories";
+import { CategoryLabel, categoryOptionLabel } from "../components/categories/CategoryIcon";
 import type { Rule, Category } from "../types";
 
 export function Rules() {
@@ -36,6 +37,10 @@ export function Rules() {
   });
 
   const rules = rulesQ.data ?? [];
+  const categoryIconByName = useMemo<Record<string, string | null>>(
+    () => Object.fromEntries((catQ.data ?? []).map((c) => [c.name, c.icon])),
+    [catQ.data],
+  );
   const filtered = filter
     ? rules.filter(
         (r) =>
@@ -113,7 +118,9 @@ export function Rules() {
                         <span className="text-text-tertiary text-xs">literal</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-text-primary">{rule.category}</td>
+                    <td className="px-4 py-3 text-xs text-text-primary">
+                      <CategoryLabel icon={categoryIconByName[rule.category]} name={rule.category} />
+                    </td>
                     <td className="px-4 py-3 text-xs text-text-secondary">{rule.subcategory}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -231,7 +238,7 @@ function RuleForm({ categories, initialValues, onSubmit, onCancel, loading, erro
           >
             <option value="">— select —</option>
             {categories.map((c) => (
-              <option key={c.id} value={c.name}>{c.name}</option>
+              <option key={c.id} value={c.name}>{categoryOptionLabel(c.icon, c.name)}</option>
             ))}
           </select>
         </div>

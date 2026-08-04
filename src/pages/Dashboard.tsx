@@ -21,7 +21,7 @@ export function Dashboard() {
   const [compensate, setCompensate]     = useState(false);
 
   const { data: transactions = [], isLoading, error } = useTransactions();
-  const { categoryNames, compensationMap } = useCategoryMaps();
+  const { categoryNames, categoryIconByName, compensationMap } = useCategoryMaps();
 
   const expenses = useExpenses({
     transactions, periodFilter, scale, averageMode, compensate, compensationMap, categoryNames,
@@ -63,19 +63,19 @@ export function Dashboard() {
           )}
         </div>
         <p className="mb-4 text-xs text-text-tertiary">Double-click a category in the legend to focus it.</p>
-        <ExpensesChart data={expenses.data} categoryOrder={expenses.categoryOrder} scale={scale} averageMode={averageMode} />
+        <ExpensesChart data={expenses.data} categoryOrder={expenses.categoryOrder} scale={scale} averageMode={averageMode} categoryIcons={categoryIconByName} />
       </section>
 
       {averageMode !== "Off" && expenses.typicalMonth.length > 0 && (
         <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
           <h2 className="mb-4 text-lg font-medium text-text-primary">📅 Typical Month</h2>
-          <TypicalMonthChart data={expenses.typicalMonth} monthCount={expenses.monthCount} />
+          <TypicalMonthChart data={expenses.typicalMonth} monthCount={expenses.monthCount} categoryIcons={categoryIconByName} />
         </section>
       )}
 
       <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
         <h2 className="mb-4 text-lg font-medium text-text-primary">Income</h2>
-        <IncomeChart data={income.data} categoryOrder={income.categoryOrder} scale={scale} averageMode={averageMode} />
+        <IncomeChart data={income.data} categoryOrder={income.categoryOrder} scale={scale} averageMode={averageMode} categoryIcons={categoryIconByName} />
       </section>
     </div>
   );

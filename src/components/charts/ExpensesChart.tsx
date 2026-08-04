@@ -10,20 +10,23 @@ import {
 } from "recharts";
 import type { AggregatedData, Scale } from "../../types";
 import { CHART_COLORS, formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
+import { CategoryIcon, CategoryLabel } from "../categories/CategoryIcon";
 
 interface Props {
   data: AggregatedData[];
   categoryOrder: string[];
   scale: Scale;
   averageMode: string;
+  categoryIcons: Record<string, string | null>;
 }
 
 const CustomTooltip = ({
-  active, payload, label,
+  active, payload, label, categoryIcons,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
+  categoryIcons: Record<string, string | null>;
 }) => {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((s, p) => s + (p.value ?? 0), 0);
@@ -34,6 +37,7 @@ const CustomTooltip = ({
         <div key={p.name} className="flex items-center justify-between gap-6">
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
+            <CategoryIcon icon={categoryIcons[p.name]} size="sm" />
             <span className="text-text-secondary">{p.name}</span>
           </span>
           <span className="font-mono text-text-primary">{formatEuro(p.value)}</span>
@@ -47,7 +51,7 @@ const CustomTooltip = ({
   );
 };
 
-export function ExpensesChart({ data, categoryOrder, scale, averageMode }: Props) {
+export function ExpensesChart({ data, categoryOrder, scale, averageMode, categoryIcons }: Props) {
   if (!data.length || data.every((d) => d.value === 0)) {
     return (
       <div className="flex h-64 items-center justify-center text-text-tertiary">
@@ -77,10 +81,12 @@ export function ExpensesChart({ data, categoryOrder, scale, averageMode }: Props
           tickLine={false}
           label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip categoryIcons={categoryIcons} />} />
         <Legend
           wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
-          formatter={(v) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>}
+          formatter={(v) => (
+            <CategoryLabel icon={categoryIcons[String(v)]} name={String(v)} className="text-text-secondary" />
+          )}
         />
         {categoryOrder.map((cat, i) => (
           <Bar
