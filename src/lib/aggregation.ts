@@ -175,7 +175,6 @@ export function aggregateExpensesCompensated(
       tx.debit != null &&
       tx.debit > 0,
   );
-  if (!expenses.length) return [[], 0];
 
   // Build expense aggregation map
   const expAgg = new Map<string, number>();
@@ -185,7 +184,8 @@ export function aggregateExpensesCompensated(
     expAgg.set(key, (expAgg.get(key) ?? 0) + (tx.debit ?? 0));
   }
 
-  // Process refunds
+  // Match refunds to a target category via the compensation map; anything that
+  // doesn't resolve is tallied separately rather than silently dropped.
   const refunds = withCat.filter(
     (tx) =>
       REFUND_CATEGORIES.includes(tx.category!) &&
@@ -194,6 +194,7 @@ export function aggregateExpensesCompensated(
   );
 
   let unmatchedTotal = 0;
+  const matchedRefunds: { period: Date; category: string; credit: number }[] = [];
 
   for (const refund of refunds) {
     const sid = refund.subcategory_id;
@@ -203,17 +204,36 @@ export function aggregateExpensesCompensated(
     const targetCategory = categoryNames[targetCatId];
     if (!targetCategory) { unmatchedTotal += refund.credit ?? 0; continue; }
 
-    const periodStr = format(floorToPeriod(new Date(refund.date_operation), scale), "yyyy-MM-dd");
-    const key = `${periodStr}|${targetCategory}`;
-    expAgg.set(key, Math.max(0, (expAgg.get(key) ?? 0) - (refund.credit ?? 0)));
+    matchedRefunds.push({
+      period: floorToPeriod(new Date(refund.date_operation), scale),
+      category: targetCategory,
+      credit: refund.credit ?? 0,
+    });
   }
 
-  // Build result from grid
-  const expDates = expenses.map((tx) => new Date(tx.date_operation).getTime());
-  const minPeriod = floorToPeriod(new Date(Math.min(...expDates)), scale);
-  const maxPeriod = floorToPeriod(new Date(Math.max(...expDates)), scale);
+  if (!expenses.length && !matchedRefunds.length) return [[], unmatchedTotal];
+
+  for (const { period, category, credit } of matchedRefunds) {
+    const key = `${format(period, "yyyy-MM-dd")}|${category}`;
+    expAgg.set(key, Math.max(0, (expAgg.get(key) ?? 0) - credit));
+  }
+
+  // Build result grid — span every period and category touched by either an
+  // expense or a matched refund, so a refund's effect is never silently dropped
+  // just because its category or date falls outside what `expenses` alone covers.
+  const expenseDates = expenses.map((tx) => new Date(tx.date_operation).getTime());
+  const refundPeriodDates = matchedRefunds.map((r) => r.period.getTime());
+  const allDates = [...expenseDates, ...refundPeriodDates];
+  const minPeriod = floorToPeriod(new Date(Math.min(...allDates)), scale);
+  const maxPeriod = floorToPeriod(new Date(Math.max(...allDates)), scale);
   const allPeriods = generatePeriods(minPeriod, maxPeriod, scale);
-  const categories = [...new Set(expenses.map((tx) => tx.category!))] as string[];
+
+  const categories = [
+    ...new Set([
+      ...expenses.map((tx) => tx.category!),
+      ...matchedRefunds.map((r) => r.category),
+    ]),
+  ];
 
   const result: AggregatedData[] = [];
   for (const period of allPeriods) {
