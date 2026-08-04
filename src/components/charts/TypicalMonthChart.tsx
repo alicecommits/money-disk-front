@@ -1,5 +1,5 @@
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import type { CategoryTotal } from "../../types";
 import { CHART_COLORS, formatEuro } from "../../lib/aggregation";
@@ -41,7 +41,7 @@ export function TypicalMonthChart({ data, monthCount }: Props) {
           />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
-            formatter={(v: number, name: string) => [formatEuro(v), name]}
+            formatter={(v, name) => [formatEuro(Number(v)), String(name)]}
             contentStyle={{
               background: "var(--bg-tertiary)",
               border: "1px solid var(--border-default)",

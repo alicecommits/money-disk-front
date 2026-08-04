@@ -279,7 +279,7 @@ function RuleForm({ categories, initialValues, onSubmit, onCancel, loading, erro
               pattern,
               is_regex: isRegex,
               subcategory_id: Number(subId),
-              priority: priority !== "" ? Number(priority) : undefined,
+              ...(priority !== "" ? { priority: Number(priority) } : {}),
             });
           }}
           disabled={loading || !pattern || !subId}

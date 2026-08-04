@@ -161,12 +161,12 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
       date_column: dateCol,
       label_columns: labelCols.length ? labelCols : [dateCol],
       amount_mode: amountMode,
-      debit_column: amountMode === "separate" ? debitCol || undefined : undefined,
-      credit_column: amountMode === "separate" ? creditCol || undefined : undefined,
-      amount_column: amountMode === "combined" ? amountCol || undefined : undefined,
-      extra_context_column: extraCol || undefined,
       source_currency: currency,
       sep,
+      ...(amountMode === "separate" && debitCol ? { debit_column: debitCol } : {}),
+      ...(amountMode === "separate" && creditCol ? { credit_column: creditCol } : {}),
+      ...(amountMode === "combined" && amountCol ? { amount_column: amountCol } : {}),
+      ...(extraCol ? { extra_context_column: extraCol } : {}),
     };
     onSubmit(mapping);
   }
@@ -309,7 +309,7 @@ interface ResultsEditorProps {
 }
 
 export function ResultsEditor({
-  rows, categories, onUpdateRow, onConfirm, loading, stats,
+  rows, categories, onUpdateRow, onConfirm, loading,
 }: ResultsEditorProps) {
   function handleCategoryChange(index: number, catName: string) {
     const cat = categories.find((c) => c.name === catName);

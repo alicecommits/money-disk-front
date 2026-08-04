@@ -2,7 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import type { AggregatedData, Scale } from "../../types";
-import { CHART_COLORS, formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
+import { formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
 
 interface Props {
   data: AggregatedData[];
@@ -45,13 +45,13 @@ export function IncomeChart({ data, categoryOrder, scale, averageMode }: Props) 
           label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
         />
         <Tooltip
-          formatter={(v: number, name: string) => [formatEuro(v), name]}
+          formatter={(v, name) => [formatEuro(Number(v)), String(name)]}
           contentStyle={{
             background: "var(--bg-tertiary)",
             border: "1px solid var(--border-default)",
             borderRadius: 8,
           }}
-          labelFormatter={(v) => formatPeriodLabel(v, scale)}
+          labelFormatter={(v) => formatPeriodLabel(String(v), scale)}
         />
         <Legend
           wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
