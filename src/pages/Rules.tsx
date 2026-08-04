@@ -1,0 +1,300 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getRules, createRule, updateRule, deleteRule } from "../api/client";
+import { useCategories } from "../hooks/useCategories";
+import type { Rule, Category } from "../types";
+
+export function Rules() {
+  const queryClient = useQueryClient();
+  const rulesQ  = useQuery({ queryKey: ["rules"], queryFn: getRules });
+  const catQ    = useCategories();
+
+  const [showAdd, setShowAdd]   = useState(false);
+  const [editId, setEditId]     = useState<number | null>(null);
+  const [filter, setFilter]     = useState("");
+
+  const createM = useMutation({
+    mutationFn: createRule,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      setShowAdd(false);
+    },
+  });
+
+  const updateM = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof updateRule>[1] }) =>
+      updateRule(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      setEditId(null);
+    },
+  });
+
+  const deleteM = useMutation({
+    mutationFn: deleteRule,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rules"] }),
+  });
+
+  const rules = rulesQ.data ?? [];
+  const filtered = filter
+    ? rules.filter(
+        (r) =>
+          r.pattern.toLowerCase().includes(filter.toLowerCase()) ||
+          r.category.toLowerCase().includes(filter.toLowerCase()) ||
+          r.subcategory.toLowerCase().includes(filter.toLowerCase()),
+      )
+    : rules;
+
+  return (
+    <div className="px-8 py-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-text-primary">Pattern Rules</h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            {rules.length} rules · lower priority number = matched first
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          style={{ background: "var(--accent-gradient)" }}
+        >
+          + Add Rule
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Filter by pattern, category, subcategory…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="w-full max-w-sm rounded-lg border border-border-default bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+      />
+
+      {/* Add form */}
+      {showAdd && (
+        <RuleForm
+          categories={catQ.data ?? []}
+          onSubmit={(data) => createM.mutate(data)}
+          onCancel={() => setShowAdd(false)}
+          loading={createM.isPending}
+          error={createM.error}
+        />
+      )}
+
+      {/* Rules table */}
+      {rulesQ.isLoading ? (
+        <div className="text-text-tertiary text-sm">Loading rules…</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border-subtle bg-bg-secondary">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-border-subtle bg-bg-tertiary">
+                {["Priority", "Pattern", "Regex", "Category", "Subcategory", "Actions"].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-secondary whitespace-nowrap">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((rule) => (
+                <>
+                  <tr key={rule.id} className="border-b border-border-subtle transition-colors hover:bg-bg-hover">
+                    <td className="px-4 py-3 font-mono text-xs text-text-tertiary">{rule.priority}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-text-primary max-w-[320px] truncate" title={rule.pattern}>
+                      {rule.pattern}
+                    </td>
+                    <td className="px-4 py-3">
+                      {rule.is_regex ? (
+                        <span className="rounded px-1.5 py-0.5 text-xs bg-blue-900/40 text-blue-400 font-mono">regex</span>
+                      ) : (
+                        <span className="text-text-tertiary text-xs">literal</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-text-primary">{rule.category}</td>
+                    <td className="px-4 py-3 text-xs text-text-secondary">{rule.subcategory}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setEditId(editId === rule.id ? null : rule.id)}
+                          className="rounded px-2 py-1 text-xs border border-border-default text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete rule "${rule.pattern}"?`)) {
+                              deleteM.mutate(rule.id);
+                            }
+                          }}
+                          className="rounded px-2 py-1 text-xs border border-red-900/60 text-red-400 hover:bg-red-950/40 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {editId === rule.id && (
+                    <tr key={`${rule.id}-edit`} className="bg-bg-tertiary">
+                      <td colSpan={6} className="px-4 py-4">
+                        <RuleForm
+                          categories={catQ.data ?? []}
+                          initialValues={rule}
+                          onSubmit={(data) => updateM.mutate({ id: rule.id, payload: data })}
+                          onCancel={() => setEditId(null)}
+                          loading={updateM.isPending}
+                          error={updateM.error}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+              {!filtered.length && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-text-tertiary">
+                    No rules found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RuleForm ──────────────────────────────────────────────────────────────────
+
+interface RuleFormProps {
+  categories: Category[];
+  initialValues?: Rule;
+  onSubmit: (data: { pattern: string; is_regex: boolean; subcategory_id: number; priority?: number }) => void;
+  onCancel: () => void;
+  loading: boolean;
+  error?: Error | null;
+}
+
+function RuleForm({ categories, initialValues, onSubmit, onCancel, loading, error }: RuleFormProps) {
+  const [pattern,   setPattern]   = useState(initialValues?.pattern ?? "");
+  const [isRegex,   setIsRegex]   = useState(initialValues?.is_regex ?? false);
+  const [catName,   setCatName]   = useState(initialValues?.category ?? "");
+  const [subId,     setSubId]     = useState<number | "">(initialValues?.subcategory_id ?? "");
+  const [priority,  setPriority]  = useState<number | "">(initialValues?.priority ?? "");
+
+  const cat = categories.find((c) => c.name === catName);
+
+  const inputCls =
+    "rounded-lg border border-border-default bg-bg-tertiary px-3 py-2 text-sm text-text-primary " +
+    "focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20";
+
+  return (
+    <div className="rounded-lg border border-border-default bg-bg-secondary p-4 space-y-4">
+      <h3 className="text-sm font-medium text-text-primary">
+        {initialValues ? "Edit Rule" : "New Rule"}
+      </h3>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Pattern */}
+        <div className="col-span-2 flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-text-tertiary mb-1">Pattern</label>
+            <input
+              type="text"
+              className={inputCls + " w-full font-mono"}
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value)}
+              placeholder="e.g. AUCHAN or ^CARTE.*PARIS"
+            />
+          </div>
+          <label className="flex items-center gap-2 pb-2 text-sm text-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isRegex}
+              onChange={(e) => setIsRegex(e.target.checked)}
+              className="accent-accent-primary"
+            />
+            Regex
+          </label>
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="block text-xs font-medium text-text-tertiary mb-1">Category</label>
+          <select
+            className={inputCls + " w-full"}
+            value={catName}
+            onChange={(e) => { setCatName(e.target.value); setSubId(""); }}
+          >
+            <option value="">— select —</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Subcategory */}
+        <div>
+          <label className="block text-xs font-medium text-text-tertiary mb-1">Subcategory</label>
+          <select
+            className={inputCls + " w-full"}
+            value={subId}
+            onChange={(e) => setSubId(Number(e.target.value))}
+            disabled={!cat}
+          >
+            <option value="">— select —</option>
+            {cat?.subcategories.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Priority */}
+        <div>
+          <label className="block text-xs font-medium text-text-tertiary mb-1">
+            Priority (blank = auto)
+          </label>
+          <input
+            type="number"
+            className={inputCls + " w-full"}
+            value={priority}
+            onChange={(e) => setPriority(e.target.value === "" ? "" : Number(e.target.value))}
+            placeholder="auto"
+          />
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400">{error.message}</p>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          onClick={() => {
+            if (!pattern || !subId) return;
+            onSubmit({
+              pattern,
+              is_regex: isRegex,
+              subcategory_id: Number(subId),
+              priority: priority !== "" ? Number(priority) : undefined,
+            });
+          }}
+          disabled={loading || !pattern || !subId}
+          className="rounded-lg px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: "var(--accent-gradient)" }}
+        >
+          {loading ? "Saving…" : "Save Rule"}
+        </button>
+        <button
+          onClick={onCancel}
+          className="rounded-lg border border-border-default px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
