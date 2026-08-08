@@ -144,3 +144,7 @@ vite.config.ts.timestamp-*
 
 # Husky internal helpers
 .husky/_
+
+# Claude
+.claude/
+CLAUDE.md
