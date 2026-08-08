@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRules, createRule, updateRule, deleteRule } from "../api/client";
 import { useCategories } from "../hooks/useCategories";
+import { usePagination } from "../hooks/usePagination";
+import { PaginationControls } from "../components/common/PaginationControls";
 import { CategoryLabel, categoryOptionLabel } from "../components/categories/CategoryIcon";
 import type { Rule, Category } from "../types";
 
@@ -49,6 +51,11 @@ export function Rules() {
           r.subcategory.toLowerCase().includes(filter.toLowerCase()),
       )
     : rules;
+
+  const { page, setPage, pageSize, setPageSize, totalPages, pageItems } = usePagination(filtered, {
+    initialPageSize: 50,
+    resetKey: filter,
+  });
 
   return (
     <div className="px-8 py-6 space-y-6">
@@ -104,7 +111,7 @@ export function Rules() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((rule) => (
+              {pageItems.map((rule) => (
                 <>
                   <tr key={rule.id} className="border-b border-border-subtle transition-colors hover:bg-bg-hover">
                     <td className="px-4 py-3 font-mono text-xs text-text-tertiary">{rule.priority}</td>
@@ -169,6 +176,16 @@ export function Rules() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {!rulesQ.isLoading && filtered.length > 0 && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       )}
     </div>
   );

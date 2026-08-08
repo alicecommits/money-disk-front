@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import type { Category, ColumnMapping, ProcessedTransaction } from "../../types";
 import { categoryOptionLabel } from "../categories/CategoryIcon";
+import { usePagination } from "../../hooks/usePagination";
+import { PaginationControls } from "../common/PaginationControls";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -312,6 +314,9 @@ interface ResultsEditorProps {
 export function ResultsEditor({
   rows, categories, onUpdateRow, onConfirm, loading,
 }: ResultsEditorProps) {
+  const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
+  const [search, setSearch] = useState("");
+
   function handleCategoryChange(index: number, catName: string) {
     const cat = categories.find((c) => c.name === catName);
     if (!cat) return;
@@ -334,6 +339,24 @@ export function ResultsEditor({
   const matched   = rows.filter((r) => r.subcategory_id != null).length;
   const unmatched = rows.length - matched;
 
+  const indexed = useMemo(
+    () => rows.map((row, originalIndex) => ({ row, originalIndex })),
+    [rows],
+  );
+
+  const filtered = useMemo(() => indexed.filter(({ row }) => {
+    if (showUnmatchedOnly && row.subcategory_id != null) return false;
+    if (search && !row.label.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  }), [indexed, showUnmatchedOnly, search]);
+
+  const filteredUnmatched = filtered.filter(({ row }) => row.subcategory_id == null).length;
+
+  const { page, setPage, pageSize, setPageSize, totalPages, pageItems } = usePagination(filtered, {
+    initialPageSize: 50,
+    resetKey: `${showUnmatchedOnly}-${search}`,
+  });
+
   return (
     <div className="space-y-4">
       {/* Stats bar */}
@@ -349,6 +372,29 @@ export function ResultsEditor({
         </span>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
+        <input
+          type="text"
+          placeholder="Search by label…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full max-w-xs rounded-lg border border-border-default bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-accent-primary focus:outline-none focus:ring-2 focus:ring-accent-primary/20"
+        />
+        <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showUnmatchedOnly}
+            onChange={(e) => setShowUnmatchedOnly(e.target.checked)}
+            className="accent-accent-primary"
+          />
+          Show unmatched only
+        </label>
+        <span className="text-xs text-text-tertiary">
+          {filtered.length} rows · {filteredUnmatched} unmatched
+        </span>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-border-subtle max-h-[50vh]">
         <table className="min-w-full text-xs">
           <thead className="sticky top-0 z-10">
@@ -361,11 +407,11 @@ export function ResultsEditor({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => {
+            {pageItems.map(({ row, originalIndex }) => {
               const cat = categories.find((c) => c.name === row.category);
               const isMatched = row.subcategory_id != null;
               return (
-                <tr key={i} className={
+                <tr key={originalIndex} className={
                   "border-b border-border-subtle transition-colors " +
                   (isMatched ? "bg-bg-secondary" : "bg-yellow-950/20")
                 }>
@@ -388,7 +434,7 @@ export function ResultsEditor({
                     <select
                       className="rounded border border-border-subtle bg-bg-primary px-2 py-0.5 text-xs text-text-primary"
                       value={row.category ?? ""}
-                      onChange={(e) => handleCategoryChange(i, e.target.value)}
+                      onChange={(e) => handleCategoryChange(originalIndex, e.target.value)}
                     >
                       <option value="">— unassigned —</option>
                       {categories.map((c) => (
@@ -400,7 +446,7 @@ export function ResultsEditor({
                     <select
                       className="rounded border border-border-subtle bg-bg-primary px-2 py-0.5 text-xs text-text-primary"
                       value={row.subcategory_id ?? ""}
-                      onChange={(e) => handleSubcategoryChange(i, row, Number(e.target.value))}
+                      onChange={(e) => handleSubcategoryChange(originalIndex, row, Number(e.target.value))}
                       disabled={!cat}
                     >
                       <option value="">— select —</option>
@@ -412,9 +458,26 @@ export function ResultsEditor({
                 </tr>
               );
             })}
+            {!pageItems.length && (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-text-tertiary">
+                  No rows match the current filters
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
+      {filtered.length > 0 && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
+      )}
 
       <button
         onClick={onConfirm}
