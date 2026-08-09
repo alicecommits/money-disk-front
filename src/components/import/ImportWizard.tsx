@@ -3,7 +3,9 @@ import { useDropzone } from "react-dropzone";
 import type { Category, ColumnMapping, ProcessedTransaction } from "../../types";
 import { categoryOptionLabel } from "../categories/CategoryIcon";
 import { usePagination } from "../../hooks/usePagination";
+import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { PaginationControls } from "../common/PaginationControls";
+import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -306,16 +308,18 @@ interface ResultsEditorProps {
   rows: ProcessedTransaction[];
   categories: Category[];
   onUpdateRow: (index: number, updated: Partial<ProcessedTransaction>) => void;
+  onRemoveRow: (index: number) => void;
   onConfirm: () => void;
   loading: boolean;
   stats: { total: number; matched: number; unmatched: number } | null;
 }
 
 export function ResultsEditor({
-  rows, categories, onUpdateRow, onConfirm, loading,
+  rows, categories, onUpdateRow, onRemoveRow, onConfirm, loading,
 }: ResultsEditorProps) {
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [search, setSearch] = useState("");
+  const confirmSkip = useConfirmDelete<{ row: ProcessedTransaction; originalIndex: number }>();
 
   function handleCategoryChange(index: number, catName: string) {
     const cat = categories.find((c) => c.name === catName);
@@ -399,7 +403,7 @@ export function ResultsEditor({
         <table className="min-w-full text-xs">
           <thead className="sticky top-0 z-10">
             <tr className="border-b border-border-subtle bg-bg-tertiary">
-              {["Date", "Label", "Debit", "Credit", "Category", "Subcategory"].map((h) => (
+              {["Date", "Label", "Debit", "Credit", "Category", "Subcategory", ""].map((h) => (
                 <th key={h} className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wider text-text-secondary whitespace-nowrap">
                   {h}
                 </th>
@@ -455,12 +459,21 @@ export function ResultsEditor({
                       ))}
                     </select>
                   </td>
+                  <td className="px-3 py-1.5 text-right">
+                    <button
+                      onClick={() => confirmSkip.requestDelete({ row, originalIndex })}
+                      title="Skip transaction"
+                      className="text-text-tertiary hover:text-amber-400 transition-colors"
+                    >
+                      🗑️
+                    </button>
+                  </td>
                 </tr>
               );
             })}
             {!pageItems.length && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-text-tertiary">
+                <td colSpan={7} className="px-3 py-8 text-center text-text-tertiary">
                   No rows match the current filters
                 </td>
               </tr>
@@ -487,6 +500,20 @@ export function ResultsEditor({
       >
         {loading ? "Importing…" : `Confirm Import (${rows.length} transactions)`}
       </button>
+
+      <ConfirmDeleteModal
+        isOpen={confirmSkip.isOpen}
+        variant="warning"
+        title="Skip this transaction?"
+        description={
+          confirmSkip.target
+            ? `${confirmSkip.target.row.date_operation} · ${confirmSkip.target.row.label} · €${(confirmSkip.target.row.debit ?? confirmSkip.target.row.credit ?? 0).toFixed(2)}`
+            : ""
+        }
+        body="This transaction will not be imported into the database. You can always re-import it later from the original CSV."
+        onConfirm={() => confirmSkip.confirm(({ originalIndex }) => onRemoveRow(originalIndex))}
+        onCancel={confirmSkip.cancel}
+      />
     </div>
   );
 }

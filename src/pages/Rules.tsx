@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRules, createRule, updateRule, deleteRule } from "../api/client";
 import { useCategories } from "../hooks/useCategories";
 import { usePagination } from "../hooks/usePagination";
+import { useConfirmDelete } from "../hooks/useConfirmDelete";
 import { PaginationControls } from "../components/common/PaginationControls";
+import { ConfirmDeleteModal } from "../components/ui/ConfirmDeleteModal";
 import { CategoryLabel, categoryOptionLabel } from "../components/categories/CategoryIcon";
 import type { Rule, Category } from "../types";
 
@@ -56,6 +58,8 @@ export function Rules() {
     initialPageSize: 50,
     resetKey: filter,
   });
+
+  const confirmDelete = useConfirmDelete<Rule>();
 
   return (
     <div className="px-8 py-6 space-y-6">
@@ -138,11 +142,7 @@ export function Rules() {
                           Edit
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Delete rule "${rule.pattern}"?`)) {
-                              deleteM.mutate(rule.id);
-                            }
-                          }}
+                          onClick={() => confirmDelete.requestDelete(rule)}
                           className="rounded px-2 py-1 text-xs border border-red-900/60 text-red-400 hover:bg-red-950/40 transition-colors"
                         >
                           Delete
@@ -187,6 +187,19 @@ export function Rules() {
           onPageSizeChange={setPageSize}
         />
       )}
+
+      <ConfirmDeleteModal
+        isOpen={confirmDelete.isOpen}
+        variant="danger"
+        title="Delete rule?"
+        description={
+          confirmDelete.target
+            ? `You are about to delete: ${confirmDelete.target.pattern} → ${confirmDelete.target.category} / ${confirmDelete.target.subcategory}`
+            : ""
+        }
+        onConfirm={() => confirmDelete.confirm((rule) => deleteM.mutate(rule.id))}
+        onCancel={confirmDelete.cancel}
+      />
     </div>
   );
 }

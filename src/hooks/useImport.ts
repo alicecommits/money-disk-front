@@ -75,6 +75,10 @@ export function useImport() {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...updated } : r)));
   }
 
+  function removeRow(index: number) {
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function confirmImport() {
     const name = file?.name ?? "unknown.csv";
     confirmMutation.mutate({ r: rows, name });
@@ -98,7 +102,7 @@ export function useImport() {
     // State
     step, file, separator, preview, mapping, rows, processStats, importResult,
     // Actions
-    uploadFile, processMapping, updateRow, confirmImport, reset,
+    uploadFile, processMapping, updateRow, removeRow, confirmImport, reset,
     // Loading/error
     previewLoading:  previewMutation.isPending,
     processLoading:  processMutation.isPending,

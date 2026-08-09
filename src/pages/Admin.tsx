@@ -67,7 +67,7 @@ export function Admin() {
         )}
 
         {w.step === "review" && (
-          <ResultsEditor rows={w.rows} categories={categories} onUpdateRow={w.updateRow} onConfirm={w.confirmImport} loading={w.confirmLoading} stats={w.processStats} />
+          <ResultsEditor rows={w.rows} categories={categories} onUpdateRow={w.updateRow} onRemoveRow={w.removeRow} onConfirm={w.confirmImport} loading={w.confirmLoading} stats={w.processStats} />
         )}
 
         {w.step === "done" && w.importResult && (
