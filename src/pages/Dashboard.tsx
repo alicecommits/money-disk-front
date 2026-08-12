@@ -12,19 +12,34 @@ import {
   ScaleRadio,
   AverageSelect,
   CompensateToggle,
+  ShowInternalToggle,
 } from "../components/controls/Controls";
+
+const TYPICAL_MONTH_INTERNAL_NOTE =
+  "Internal transfers are always excluded here, regardless of the toggle above — " +
+  "this chart is for budgeting intuition and intrabank moves are noise there.";
+
+const INTERNAL_HIDDEN_WHILE_COMPENSATING_NOTE =
+  "Hidden while Compensate is on — refund compensation is about isolating true " +
+  "spending, and internal transfers aren't spending.";
 
 export function Dashboard() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("Last 12 Months");
   const [scale, setScale]               = useState<Scale>("Month");
   const [averageMode, setAverageMode]   = useState<AverageMode>("Off");
   const [compensate, setCompensate]     = useState(false);
+  const [showInternal, setShowInternal] = useState(false);
 
   const { data: transactions = [], isLoading, error } = useTransactions();
   const { categoryNames, categoryIconByName, compensationMap } = useCategoryMaps();
 
+  // Refund compensation is about isolating true spending — Internal transfers
+  // are administrative, not spending, so the two toggles are mutually exclusive.
+  const effectiveIncludeInternal = compensate ? false : showInternal;
+
   const expenses = useExpenses({
     transactions, periodFilter, scale, averageMode, compensate, compensationMap, categoryNames,
+    includeInternal: effectiveIncludeInternal,
   });
   const income = useIncome(transactions, periodFilter, scale, averageMode);
 
@@ -53,6 +68,12 @@ export function Dashboard() {
         <ScaleRadio value={scale} onChange={setScale} />
         <AverageSelect value={averageMode} onChange={setAverageMode} />
         <CompensateToggle value={compensate} onChange={setCompensate} />
+        <ShowInternalToggle
+          value={effectiveIncludeInternal}
+          onChange={setShowInternal}
+          disabled={compensate}
+          disabledReason={INTERNAL_HIDDEN_WHILE_COMPENSATING_NOTE}
+        />
       </div>
 
       <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
@@ -66,9 +87,17 @@ export function Dashboard() {
         <ExpensesChart data={expenses.data} categoryOrder={expenses.categoryOrder} scale={scale} averageMode={averageMode} categoryIcons={categoryIconByName} />
       </section>
 
-      {averageMode !== "Off" && expenses.typicalMonth.length > 0 && (
+      {(averageMode !== "Off" || expenses.typicalMonth.length > 0) && (
         <section className="rounded-xl border border-border-subtle bg-bg-secondary p-6">
-          <h2 className="mb-4 text-lg font-medium text-text-primary">📅 Typical Month</h2>
+          <h2 className="mb-4 flex items-center gap-1.5 text-lg font-medium text-text-primary">
+            📅 Typical Month
+            <span
+              className="cursor-help text-sm text-text-tertiary"
+              title={TYPICAL_MONTH_INTERNAL_NOTE}
+            >
+              ⓘ
+            </span>
+          </h2>
           <TypicalMonthChart data={expenses.typicalMonth} monthCount={expenses.monthCount} categoryIcons={categoryIconByName} />
         </section>
       )}

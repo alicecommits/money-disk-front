@@ -248,6 +248,40 @@ describe("aggregateExpenses", () => {
   it("returns an empty array when there are no transactions", () => {
     expect(aggregateExpenses([], "Month")).toEqual([]);
   });
+
+  it("excludes Internal by default (includeInternal omitted)", () => {
+    const txs = [
+      tx({ date_operation: "2025-01-08", category: "Groceries", debit: 50 }),
+      tx({ date_operation: "2025-01-08", category: "Internal", debit: 200 }),
+    ];
+    expect(aggregateExpenses(txs, "Month")).toEqual([
+      { period: "2025-01-01", category: "Groceries", value: 50 },
+    ]);
+  });
+
+  it("excludes Internal when includeInternal is explicitly false", () => {
+    const txs = [
+      tx({ date_operation: "2025-01-08", category: "Groceries", debit: 50 }),
+      tx({ date_operation: "2025-01-08", category: "Internal", debit: 200 }),
+    ];
+    expect(aggregateExpenses(txs, "Month", false)).toEqual([
+      { period: "2025-01-01", category: "Groceries", value: 50 },
+    ]);
+  });
+
+  it("includes Internal rows when includeInternal is true, without dropping the other exclusions", () => {
+    const txs = [
+      tx({ date_operation: "2025-01-08", category: "Groceries", debit: 50 }),
+      tx({ date_operation: "2025-01-08", category: "Internal", debit: 200 }),
+      tx({ date_operation: "2025-01-08", category: "Income", debit: 10 }),
+    ];
+    expect(byPeriodCategory(aggregateExpenses(txs, "Month", true))).toEqual(
+      byPeriodCategory([
+        { period: "2025-01-01", category: "Groceries", value: 50 },
+        { period: "2025-01-01", category: "Internal", value: 200 },
+      ]),
+    );
+  });
 });
 
 // ── aggregateIncome ───────────────────────────────────────────────────────────
@@ -494,6 +528,14 @@ describe("getTypicalMonth", () => {
   it("Over 12 Months divides totals by 12", () => {
     const txs = [tx({ date_operation: "2025-01-08", category: "Groceries", debit: 1200 })];
     expect(getTypicalMonth(txs, "Over 12 Months")).toEqual([{ category: "Groceries", amount: 100 }]);
+  });
+
+  it("always excludes Internal, regardless of the includeInternal toggle elsewhere — getTypicalMonth has no such parameter", () => {
+    const txs = [
+      tx({ date_operation: "2025-01-08", category: "Groceries", debit: 100 }),
+      tx({ date_operation: "2025-01-09", category: "Internal", debit: 5000 }),
+    ];
+    expect(getTypicalMonth(txs, "Off")).toEqual([{ category: "Groceries", amount: 100 }]);
   });
 
   it("Over Max divides by the distinct month count of ALL passed-in transactions, not just the expense ones", () => {

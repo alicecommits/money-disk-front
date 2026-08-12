@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import type { AggregatedData, Scale } from "../../types";
-import { CHART_COLORS, formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
+import { CHART_COLORS, INTERNAL_CATEGORY, INTERNAL_CHART_COLOR, formatPeriodLabel, formatEuro, pivotForRecharts } from "../../lib/aggregation";
 import { CategoryIcon, CategoryLabel } from "../categories/CategoryIcon";
 
 interface Props {
@@ -93,7 +93,7 @@ export function ExpensesChart({ data, categoryOrder, scale, averageMode, categor
             key={cat}
             dataKey={cat}
             stackId="exp"
-            fill={CHART_COLORS[i % CHART_COLORS.length]}
+            fill={cat === INTERNAL_CATEGORY ? INTERNAL_CHART_COLOR : CHART_COLORS[i % CHART_COLORS.length]}
             maxBarSize={60}
           />
         ))}

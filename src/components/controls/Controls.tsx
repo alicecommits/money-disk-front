@@ -27,7 +27,9 @@ export function PeriodFilter({ value, onChange }: PeriodFilterProps) {
         onChange={(e) => onChange(e.target.value as PeriodFilter)}
       >
         {PERIOD_FILTERS.map((f) => (
-          <option key={f} value={f}>{f}</option>
+          <option key={f} value={f}>
+            {f}
+          </option>
         ))}
       </select>
     </div>
@@ -86,7 +88,9 @@ export function AverageSelect({ value, onChange }: AverageSelectProps) {
         onChange={(e) => onChange(e.target.value as AverageMode)}
       >
         {AVERAGE_MODES.map((m) => (
-          <option key={m} value={m}>{m}</option>
+          <option key={m} value={m}>
+            {m}
+          </option>
         ))}
       </select>
     </div>
@@ -130,6 +134,59 @@ export function CompensateToggle({ value, onChange }: CompensateToggleProps) {
           />
         </span>
         Compensate
+      </button>
+    </div>
+  );
+}
+
+// ── ShowInternalToggle ────────────────────────────────────────────────────────
+
+interface ShowInternalToggleProps {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
+export function ShowInternalToggle({
+  value,
+  onChange,
+  disabled = false,
+  disabledReason,
+}: ShowInternalToggleProps) {
+  return (
+    <div className="flex flex-col gap-1 w-[220px]">
+      <label className="text-xs font-medium uppercase tracking-wider text-text-tertiary">
+        Transfers
+      </label>
+      <button
+        onClick={() => !disabled && onChange(!value)}
+        disabled={disabled}
+        title={disabled ? disabledReason : undefined}
+        className={
+          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium " +
+          "transition-colors " +
+          (disabled
+            ? "cursor-help border-border-subtle bg-bg-tertiary/50 text-text-tertiary"
+            : value
+              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+              : "border-border-default bg-bg-tertiary text-text-secondary hover:bg-bg-hover")
+        }
+      >
+        <span
+          className={
+            "relative inline-flex h-4 w-7 flex-shrink-0 rounded-full transition-colors " +
+            (value && !disabled ? "bg-accent-primary" : "bg-border-default")
+          }
+        >
+          <span
+            className={
+              "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform " +
+              (value && !disabled ? "translate-x-3.5" : "translate-x-0.5")
+            }
+          />
+        </span>
+        {disabled ? "Internal off (hover FYI)" : "Show internal transfers"}
       </button>
     </div>
   );

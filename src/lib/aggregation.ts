@@ -12,34 +12,58 @@ import {
   isBefore,
 } from "date-fns";
 
-import type { AggregatedData, CategoryTotal, Scale, Transaction } from "../types";
+import type {
+  AggregatedData,
+  CategoryTotal,
+  Scale,
+  Transaction,
+} from "../types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-export const EXPENSE_EXCLUSIONS = ["Income", "Benefits", "Refund"];
-export const INCOME_CATEGORIES  = ["Income", "Benefits"];
-export const REFUND_CATEGORIES  = ["Refund"];
+export const EXPENSE_EXCLUSIONS = ["Income", "Benefits", "Refund", "Internal"];
+export const INCOME_CATEGORIES = ["Income", "Benefits"];
+export const REFUND_CATEGORIES = ["Refund"];
+export const INTERNAL_CATEGORY = "Internal";
+
+// Muted grey (mirrors --text-tertiary in index.css) so Internal reads as
+// "administrative", never mistaken for a real spending category.
+export const INTERNAL_CHART_COLOR = "#71717a";
 
 export const CHART_COLORS = [
-  "#7c5cff", "#06b6d4", "#f472b6", "#22c55e", "#f59e0b",
-  "#3b82f6", "#ef4444", "#a78bfa", "#2dd4bf", "#fb923c",
+  "#7c5cff",
+  "#06b6d4",
+  "#f472b6",
+  "#22c55e",
+  "#f59e0b",
+  "#3b82f6",
+  "#ef4444",
+  "#a78bfa",
+  "#2dd4bf",
+  "#fb923c",
 ];
 
 // ── Date utilities ────────────────────────────────────────────────────────────
 
 function floorToPeriod(date: Date, scale: Scale): Date {
   switch (scale) {
-    case "Day":   return startOfDay(date);
-    case "Week":  return startOfWeek(date, { weekStartsOn: 1 }); // Monday
-    case "Month": return startOfMonth(date);
+    case "Day":
+      return startOfDay(date);
+    case "Week":
+      return startOfWeek(date, { weekStartsOn: 1 }); // Monday
+    case "Month":
+      return startOfMonth(date);
   }
 }
 
 function generatePeriods(start: Date, end: Date, scale: Scale): Date[] {
   switch (scale) {
-    case "Day":   return eachDayOfInterval({ start, end });
-    case "Week":  return eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
-    case "Month": return eachMonthOfInterval({ start, end });
+    case "Day":
+      return eachDayOfInterval({ start, end });
+    case "Week":
+      return eachWeekOfInterval({ start, end }, { weekStartsOn: 1 });
+    case "Month":
+      return eachMonthOfInterval({ start, end });
   }
 }
 
@@ -55,11 +79,20 @@ export function filterByPeriod(
   let start: Date;
 
   switch (filterType) {
-    case "YTD":              start = startOfYear(now);     break;
-    case "Last 12 Months":  start = subMonths(now, 12);   break;
-    case "Last 6 Months":   start = subMonths(now, 6);    break;
-    case "Last 3 Months":   start = subMonths(now, 3);    break;
-    default:                return transactions;
+    case "YTD":
+      start = startOfYear(now);
+      break;
+    case "Last 12 Months":
+      start = subMonths(now, 12);
+      break;
+    case "Last 6 Months":
+      start = subMonths(now, 6);
+      break;
+    case "Last 3 Months":
+      start = subMonths(now, 3);
+      break;
+    default:
+      return transactions;
   }
 
   return transactions.filter((tx) => {
@@ -101,8 +134,8 @@ function aggregateTransactions(
   if (!withPeriod.length) return [];
 
   const periodTimes = withPeriod.map((tx) => tx.period.getTime());
-  const minPeriod   = new Date(Math.min(...periodTimes));
-  const maxPeriod   = new Date(Math.max(...periodTimes));
+  const minPeriod = new Date(Math.min(...periodTimes));
+  const maxPeriod = new Date(Math.max(...periodTimes));
 
   const allPeriods = generatePeriods(minPeriod, maxPeriod, scale);
   const categories = [...new Set(withPeriod.map((tx) => tx.category))];
@@ -133,14 +166,23 @@ function aggregateTransactions(
 
 // ── Expense / income aggregation ──────────────────────────────────────────────
 
+/** EXPENSE_EXCLUSIONS, minus Internal when the caller opts in to seeing it. */
+function expenseExclusionsFor(includeInternal: boolean): string[] {
+  return includeInternal
+    ? EXPENSE_EXCLUSIONS.filter((c) => c !== INTERNAL_CATEGORY)
+    : EXPENSE_EXCLUSIONS;
+}
+
 export function aggregateExpenses(
   transactions: Transaction[],
   scale: Scale,
+  includeInternal = false,
 ): AggregatedData[] {
+  const exclusions = expenseExclusionsFor(includeInternal);
   const filtered = transactions.filter(
     (tx) =>
       tx.category &&
-      !EXPENSE_EXCLUSIONS.includes(tx.category) &&
+      !exclusions.includes(tx.category) &&
       tx.debit != null &&
       tx.debit > 0,
   );
@@ -166,12 +208,14 @@ export function aggregateExpensesCompensated(
   scale: Scale,
   compensationMap: Record<number, number>,
   categoryNames: Record<number, string>,
+  includeInternal = false,
 ): [AggregatedData[], number] {
+  const exclusions = expenseExclusionsFor(includeInternal);
   const withCat = transactions.filter((tx) => tx.category != null);
 
   const expenses = withCat.filter(
     (tx) =>
-      !EXPENSE_EXCLUSIONS.includes(tx.category!) &&
+      !exclusions.includes(tx.category!) &&
       tx.debit != null &&
       tx.debit > 0,
   );
@@ -179,7 +223,10 @@ export function aggregateExpensesCompensated(
   // Build expense aggregation map
   const expAgg = new Map<string, number>();
   for (const tx of expenses) {
-    const periodStr = format(floorToPeriod(new Date(tx.date_operation), scale), "yyyy-MM-dd");
+    const periodStr = format(
+      floorToPeriod(new Date(tx.date_operation), scale),
+      "yyyy-MM-dd",
+    );
     const key = `${periodStr}|${tx.category}`;
     expAgg.set(key, (expAgg.get(key) ?? 0) + (tx.debit ?? 0));
   }
@@ -194,15 +241,22 @@ export function aggregateExpensesCompensated(
   );
 
   let unmatchedTotal = 0;
-  const matchedRefunds: { period: Date; category: string; credit: number }[] = [];
+  const matchedRefunds: { period: Date; category: string; credit: number }[] =
+    [];
 
   for (const refund of refunds) {
     const sid = refund.subcategory_id;
     const targetCatId = sid != null ? compensationMap[sid] : undefined;
-    if (targetCatId == null) { unmatchedTotal += refund.credit ?? 0; continue; }
+    if (targetCatId == null) {
+      unmatchedTotal += refund.credit ?? 0;
+      continue;
+    }
 
     const targetCategory = categoryNames[targetCatId];
-    if (!targetCategory) { unmatchedTotal += refund.credit ?? 0; continue; }
+    if (!targetCategory) {
+      unmatchedTotal += refund.credit ?? 0;
+      continue;
+    }
 
     matchedRefunds.push({
       period: floorToPeriod(new Date(refund.date_operation), scale),
@@ -221,7 +275,9 @@ export function aggregateExpensesCompensated(
   // Build result grid — span every period and category touched by either an
   // expense or a matched refund, so a refund's effect is never silently dropped
   // just because its category or date falls outside what `expenses` alone covers.
-  const expenseDates = expenses.map((tx) => new Date(tx.date_operation).getTime());
+  const expenseDates = expenses.map((tx) =>
+    new Date(tx.date_operation).getTime(),
+  );
   const refundPeriodDates = matchedRefunds.map((r) => r.period.getTime());
   const allDates = [...expenseDates, ...refundPeriodDates];
   const minPeriod = floorToPeriod(new Date(Math.min(...allDates)), scale);
@@ -261,10 +317,15 @@ export function applyAverage(
 
   let divisor: number;
   switch (mode) {
-    case "Over 12 Months":     divisor = 12; break;
+    case "Over 12 Months":
+      divisor = 12;
+      break;
     case "Over Max":
-    case "Over Current Period": divisor = countMonthsInPeriod(filtered); break;
-    default:                    return aggregated;
+    case "Over Current Period":
+      divisor = countMonthsInPeriod(filtered);
+      break;
+    default:
+      return aggregated;
   }
   if (divisor === 0) return aggregated;
 
@@ -294,10 +355,15 @@ export function getTypicalMonth(
 
   let divisor: number;
   switch (averageMode) {
-    case "Over 12 Months":     divisor = 12; break;
+    case "Over 12 Months":
+      divisor = 12;
+      break;
     case "Over Max":
-    case "Over Current Period": divisor = countMonthsInPeriod(transactions); break;
-    default:                    divisor = 1;
+    case "Over Current Period":
+      divisor = countMonthsInPeriod(transactions);
+      break;
+    default:
+      divisor = 1;
   }
 
   const result = Array.from(totals.entries()).map(([category, amount]) => ({
@@ -316,12 +382,12 @@ export function getCategoryOrder(data: AggregatedData[]): string[] {
   for (const row of data) {
     totals.set(row.category, (totals.get(row.category) ?? 0) + row.value);
   }
-  return [...totals.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([cat]) => cat);
+  return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([cat]) => cat);
 }
 
-export function getCategoryTotals(transactions: Transaction[]): CategoryTotal[] {
+export function getCategoryTotals(
+  transactions: Transaction[],
+): CategoryTotal[] {
   const expenses = transactions.filter(
     (tx) =>
       tx.category &&
@@ -365,9 +431,12 @@ export function pivotForRecharts(
 export function formatPeriodLabel(periodStr: string, scale: Scale): string {
   const d = new Date(periodStr);
   switch (scale) {
-    case "Day":   return format(d, "d MMM yy");
-    case "Week":  return format(d, "'W'ww yy");
-    case "Month": return format(d, "MMM yyyy");
+    case "Day":
+      return format(d, "d MMM yy");
+    case "Week":
+      return format(d, "'W'ww yy");
+    case "Month":
+      return format(d, "MMM yyyy");
   }
 }
 
