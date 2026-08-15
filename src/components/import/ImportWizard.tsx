@@ -7,7 +7,7 @@ import { usePagination } from "../../hooks/usePagination";
 import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { PaginationControls } from "../common/PaginationControls";
 import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
-import { RuleModal } from "./RuleModal";
+import { RuleModal, RulePatternEditorModal } from "./RuleModal";
 import { getRules, updateRule, bulkAssignByRule } from "../../api/client";
 import { TRANSACTIONS_KEY, useTransactions } from "../../hooks/useTransactions";
 
@@ -338,12 +338,15 @@ export function ResultsEditor({
   const transactionsQ = useTransactions();
 
   const [pendingRuleReassign, setPendingRuleReassign] = useState<PendingRuleReassign | null>(null);
+  const [patternEditorTarget, setPatternEditorTarget] = useState<PendingRuleReassign | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  type RuleSavePayload = { pattern: string; is_regex: boolean; subcategory_id: number; priority?: number };
+
   const reassignMutation = useMutation({
-    mutationFn: async ({ ruleId, subId }: { ruleId: number; subId: number }) => {
-      await updateRule(ruleId, { subcategory_id: subId });
-      return bulkAssignByRule(ruleId, subId);
+    mutationFn: async ({ ruleId, payload }: { ruleId: number; payload: RuleSavePayload }) => {
+      await updateRule(ruleId, payload);
+      return bulkAssignByRule(ruleId, payload.subcategory_id);
     },
   });
 
@@ -390,18 +393,36 @@ export function ResultsEditor({
     setPendingRuleReassign(null);
   }
 
-  async function applyUpdateRuleAndReassign() {
-    const ruleId = pendingRuleReassign?.row.matched_rule_id;
-    if (!pendingRuleReassign || ruleId == null) return;
-    const { index, subId, subName } = pendingRuleReassign;
-    const result = await reassignMutation.mutateAsync({ ruleId, subId });
-    onUpdateRow(index, { subcategory: subName, subcategory_id: subId, assignment_method: "manual" });
+  function openPatternEditor() {
+    if (!pendingRuleReassign) return;
+    setPatternEditorTarget(pendingRuleReassign);
+    setPendingRuleReassign(null);
+  }
+
+  function cancelPatternEditor() {
+    setPatternEditorTarget(null);
+  }
+
+  async function applyPatternEditorSave(payload: RuleSavePayload) {
+    const ruleId = patternEditorTarget?.row.matched_rule_id;
+    if (!patternEditorTarget || ruleId == null) return;
+    const { index } = patternEditorTarget;
+    const cat = categories.find((c) => c.subcategories.some((s) => s.id === payload.subcategory_id));
+    const sub = cat?.subcategories.find((s) => s.id === payload.subcategory_id);
+    if (!cat || !sub) return;
+
+    const result = await reassignMutation.mutateAsync({ ruleId, payload });
+    onUpdateRow(index, { category: cat.name, subcategory: sub.name, subcategory_id: sub.id, assignment_method: "manual" });
     await queryClient.invalidateQueries({ queryKey: ["rules"] });
     await queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
     setSuccessMsg(`Rule updated · ${result.updated} past transactions reassigned`);
-    setPendingRuleReassign(null);
+    setPatternEditorTarget(null);
     setTimeout(() => setSuccessMsg(null), 4000);
   }
+
+  const patternEditorRule = patternEditorTarget
+    ? rulesQ.data?.find((r) => r.id === patternEditorTarget.row.matched_rule_id)
+    : undefined;
 
   const matched   = rows.filter((r) => r.subcategory_id != null).length;
   const unmatched = rows.length - matched;
@@ -581,10 +602,26 @@ export function ResultsEditor({
           matchedRuleId={pendingRuleReassign.row.matched_rule_id ?? 0}
           matchedCount={matchedCount}
           newAssignmentLabel={`${pendingRuleReassign.categoryName} / ${pendingRuleReassign.subName}`}
-          loading={reassignMutation.isPending}
           onJustThisOne={applyJustThisOne}
-          onUpdateRuleAndReassign={applyUpdateRuleAndReassign}
+          onUpdateRuleAndReassign={openPatternEditor}
           onCancel={cancelRuleReassign}
+        />
+      )}
+
+      {patternEditorTarget && patternEditorRule && (
+        <RulePatternEditorModal
+          isOpen
+          rule={{
+            ...patternEditorRule,
+            category: patternEditorTarget.categoryName,
+            subcategory: patternEditorTarget.subName,
+            subcategory_id: patternEditorTarget.subId,
+          }}
+          categories={categories}
+          loading={reassignMutation.isPending}
+          error={reassignMutation.error}
+          onSave={applyPatternEditorSave}
+          onCancel={cancelPatternEditor}
         />
       )}
 

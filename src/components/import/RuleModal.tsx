@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { RuleForm } from "../rules/RuleForm";
+import type { Category, Rule } from "../../types";
 
 interface RuleModalProps {
   isOpen: boolean;
@@ -89,6 +91,60 @@ export function RuleModal({
             Just this one
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── RulePatternEditorModal ──────────────────────────────────────────────────
+// Second step after "This one + all past …" — lets the admin tweak the
+// pattern/regex/priority before it's saved and bulk-applied.
+
+interface RulePatternEditorModalProps {
+  isOpen: boolean;
+  rule: Rule;
+  categories: Category[];
+  loading?: boolean;
+  error?: Error | null;
+  onSave: (data: { pattern: string; is_regex: boolean; subcategory_id: number; priority?: number }) => void;
+  onCancel: () => void;
+}
+
+export function RulePatternEditorModal({
+  isOpen, rule, categories, loading = false, error = null, onSave, onCancel,
+}: RulePatternEditorModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onCancel();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onCancel]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onCancel}
+    >
+      <div className="relative w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onCancel}
+          aria-label="Close"
+          className="absolute -top-8 right-0 text-text-tertiary hover:text-text-primary transition-colors"
+        >
+          ✕
+        </button>
+        <RuleForm
+          categories={categories}
+          initialValues={rule}
+          onSubmit={onSave}
+          onCancel={onCancel}
+          loading={loading}
+          error={error}
+        />
       </div>
     </div>
   );
