@@ -58,7 +58,7 @@ export function RuleModal({
 
         <h3 className="pr-6 text-lg font-semibold text-text-primary">
           This row matches rule &ldquo;{initialPattern}&rdquo;
-          {initialIsRegex && <span className="ml-1 text-xs text-text-tertiary">(regex)</span>}
+          {Boolean(initialIsRegex) && <span className="ml-1 text-xs text-text-tertiary">(regex)</span>}
         </h3>
         <p className="mt-2 text-sm text-text-secondary">
           Currently {currentAssignmentLabel}. You picked{" "}
