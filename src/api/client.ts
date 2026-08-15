@@ -91,6 +91,15 @@ export const deleteRule = (id: number): Promise<void> =>
 export const reorderRules = (orderedIds: number[]): Promise<{ ok: boolean }> =>
   request("/rules/reorder", { method: "POST", body: JSON.stringify(orderedIds) });
 
+export const bulkAssignByRule = (
+  rule_id: number,
+  subcategory_id: number,
+): Promise<{ updated: number }> =>
+  request("/transactions/bulk-assign-by-rule", {
+    method: "POST",
+    body: JSON.stringify({ rule_id, subcategory_id }),
+  });
+
 // ── Currency ──────────────────────────────────────────────────────────────────
 
 export const getExchangeRates = (): Promise<ExchangeRate[]> =>

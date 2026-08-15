@@ -1,11 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category, ColumnMapping, ProcessedTransaction } from "../../types";
 import { categoryOptionLabel } from "../categories/CategoryIcon";
 import { usePagination } from "../../hooks/usePagination";
 import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { PaginationControls } from "../common/PaginationControls";
 import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
+import { RuleModal } from "./RuleModal";
+import { getRules, updateRule, bulkAssignByRule } from "../../api/client";
+import { TRANSACTIONS_KEY, useTransactions } from "../../hooks/useTransactions";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -314,12 +318,34 @@ interface ResultsEditorProps {
   stats: { total: number; matched: number; unmatched: number } | null;
 }
 
+interface PendingRuleReassign {
+  index: number;
+  row: ProcessedTransaction;
+  subId: number;
+  subName: string;
+  categoryName: string;
+}
+
 export function ResultsEditor({
   rows, categories, onUpdateRow, onRemoveRow, onConfirm, loading,
 }: ResultsEditorProps) {
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const confirmSkip = useConfirmDelete<{ row: ProcessedTransaction; originalIndex: number }>();
+
+  const queryClient = useQueryClient();
+  const rulesQ = useQuery({ queryKey: ["rules"], queryFn: getRules });
+  const transactionsQ = useTransactions();
+
+  const [pendingRuleReassign, setPendingRuleReassign] = useState<PendingRuleReassign | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const reassignMutation = useMutation({
+    mutationFn: async ({ ruleId, subId }: { ruleId: number; subId: number }) => {
+      await updateRule(ruleId, { subcategory_id: subId });
+      return bulkAssignByRule(ruleId, subId);
+    },
+  });
 
   function handleCategoryChange(index: number, catName: string) {
     const cat = categories.find((c) => c.name === catName);
@@ -334,10 +360,47 @@ export function ResultsEditor({
   }
 
   function handleSubcategoryChange(index: number, row: ProcessedTransaction, subId: number) {
-    const cat   = categories.find((c) => c.name === row.category);
-    const sub   = cat?.subcategories.find((s) => s.id === subId);
-    if (!sub) return;
+    const cat = categories.find((c) => c.name === row.category);
+    const sub = cat?.subcategories.find((s) => s.id === subId);
+    if (!sub || !cat) return;
+
+    if (row.matched_rule_id != null && subId !== row.subcategory_id) {
+      setPendingRuleReassign({ index, row, subId, subName: sub.name, categoryName: cat.name });
+      return;
+    }
     onUpdateRow(index, { subcategory: sub.name, subcategory_id: sub.id, assignment_method: "manual" });
+  }
+
+  const matchedRule = pendingRuleReassign
+    ? rulesQ.data?.find((r) => r.id === pendingRuleReassign.row.matched_rule_id)
+    : undefined;
+
+  const matchedCount = pendingRuleReassign
+    ? (transactionsQ.data?.filter((t) => t.matched_rule_id === pendingRuleReassign.row.matched_rule_id).length ?? 0)
+    : 0;
+
+  function applyJustThisOne() {
+    if (!pendingRuleReassign) return;
+    const { index, subId, subName } = pendingRuleReassign;
+    onUpdateRow(index, { subcategory: subName, subcategory_id: subId, assignment_method: "manual" });
+    setPendingRuleReassign(null);
+  }
+
+  function cancelRuleReassign() {
+    setPendingRuleReassign(null);
+  }
+
+  async function applyUpdateRuleAndReassign() {
+    const ruleId = pendingRuleReassign?.row.matched_rule_id;
+    if (!pendingRuleReassign || ruleId == null) return;
+    const { index, subId, subName } = pendingRuleReassign;
+    const result = await reassignMutation.mutateAsync({ ruleId, subId });
+    onUpdateRow(index, { subcategory: subName, subcategory_id: subId, assignment_method: "manual" });
+    await queryClient.invalidateQueries({ queryKey: ["rules"] });
+    await queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
+    setSuccessMsg(`Rule updated · ${result.updated} past transactions reassigned`);
+    setPendingRuleReassign(null);
+    setTimeout(() => setSuccessMsg(null), 4000);
   }
 
   const matched   = rows.filter((r) => r.subcategory_id != null).length;
@@ -492,6 +555,12 @@ export function ResultsEditor({
         />
       )}
 
+      {successMsg && (
+        <p className="rounded-lg border border-green-900 bg-green-950/30 px-3 py-2 text-sm text-green-400">
+          {successMsg}
+        </p>
+      )}
+
       <button
         onClick={onConfirm}
         disabled={loading}
@@ -500,6 +569,24 @@ export function ResultsEditor({
       >
         {loading ? "Importing…" : `Confirm Import (${rows.length} transactions)`}
       </button>
+
+      {pendingRuleReassign && (
+        <RuleModal
+          isOpen
+          mode="update"
+          initialPattern={matchedRule?.pattern ?? pendingRuleReassign.row.rule_pattern ?? ""}
+          initialIsRegex={matchedRule?.is_regex ?? false}
+          initialSubcategoryId={matchedRule?.subcategory_id ?? pendingRuleReassign.row.subcategory_id ?? 0}
+          currentAssignmentLabel={`${pendingRuleReassign.row.category} / ${pendingRuleReassign.row.subcategory}`}
+          matchedRuleId={pendingRuleReassign.row.matched_rule_id ?? 0}
+          matchedCount={matchedCount}
+          newAssignmentLabel={`${pendingRuleReassign.categoryName} / ${pendingRuleReassign.subName}`}
+          loading={reassignMutation.isPending}
+          onJustThisOne={applyJustThisOne}
+          onUpdateRuleAndReassign={applyUpdateRuleAndReassign}
+          onCancel={cancelRuleReassign}
+        />
+      )}
 
       <ConfirmDeleteModal
         isOpen={confirmSkip.isOpen}
