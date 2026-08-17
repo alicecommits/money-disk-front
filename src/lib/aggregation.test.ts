@@ -5,6 +5,7 @@ import {
   aggregateExpensesCompensated,
   aggregateIncome,
   applyAverage,
+  cosmeticConversion,
   countMonthsInPeriod,
   filterByPeriod,
   getCategoryOrder,
@@ -570,5 +571,35 @@ describe("getCategoryOrder", () => {
 
   it("returns an empty array for empty input", () => {
     expect(getCategoryOrder([])).toEqual([]);
+  });
+});
+
+// ── cosmeticConversion ──────────────────────────────────────────────────────
+
+describe("cosmeticConversion", () => {
+  it("scales every row's value by the rate, leaving period/category untouched", () => {
+    const data: AggregatedData[] = [
+      { period: "2025-01-01", category: "Groceries", value: 100 },
+      { period: "2025-01-01", category: "Rent", value: 900 },
+    ];
+    expect(cosmeticConversion(data, 0.85)).toEqual([
+      { period: "2025-01-01", category: "Groceries", value: 85 },
+      { period: "2025-01-01", category: "Rent", value: 765 },
+    ]);
+  });
+
+  it("is a no-op at rate 1", () => {
+    const data: AggregatedData[] = [
+      { period: "2025-01-01", category: "Groceries", value: 100 },
+    ];
+    expect(cosmeticConversion(data, 1)).toEqual(data);
+  });
+
+  it("does not mutate the input array", () => {
+    const data: AggregatedData[] = [
+      { period: "2025-01-01", category: "Groceries", value: 100 },
+    ];
+    cosmeticConversion(data, 2);
+    expect(data[0].value).toBe(100);
   });
 });

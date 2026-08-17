@@ -377,6 +377,18 @@ export function getTypicalMonth(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Cosmetic GBP display transform — rescales already-aggregated EUR values by a
+ * single rate. Never re-runs filter/aggregate/average; the EUR spine underneath
+ * is untouched (Design decisions: GBP is display-only).
+ */
+export function cosmeticConversion(
+  data: AggregatedData[],
+  rate: number,
+): AggregatedData[] {
+  return data.map((row) => ({ ...row, value: row.value * rate }));
+}
+
 export function getCategoryOrder(data: AggregatedData[]): string[] {
   const totals = new Map<string, number>();
   for (const row of data) {
@@ -440,6 +452,6 @@ export function formatPeriodLabel(periodStr: string, scale: Scale): string {
   }
 }
 
-export function formatEuro(value: number): string {
-  return `€${Math.round(value).toLocaleString("fr-FR")}`;
+export function formatEuro(value: number, symbol = "€"): string {
+  return `${symbol}${Math.round(value).toLocaleString("fr-FR")}`;
 }

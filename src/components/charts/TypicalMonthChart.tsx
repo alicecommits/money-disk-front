@@ -9,9 +9,10 @@ interface Props {
   data: CategoryTotal[]; // sorted ascending (smallest first → largest at bottom)
   monthCount: number;
   categoryIcons: Record<string, string | null>;
+  currencySymbol?: string;
 }
 
-export function TypicalMonthChart({ data, monthCount, categoryIcons }: Props) {
+export function TypicalMonthChart({ data, monthCount, categoryIcons, currencySymbol = "€" }: Props) {
   if (!data.length) return null;
 
   const total = data.reduce((s, d) => s + d.amount, 0);
@@ -26,7 +27,7 @@ export function TypicalMonthChart({ data, monthCount, categoryIcons }: Props) {
     <div>
       <p className="mb-3 text-sm text-text-secondary">
         Monthly average over {monthCount} month{monthCount !== 1 ? "s" : ""} —{" "}
-        <span className="font-medium text-accent-primary">{formatEuro(total)} / mo</span>
+        <span className="font-medium text-accent-primary">{formatEuro(total, currencySymbol)} / mo</span>
       </p>
       <ResponsiveContainer width="100%" height={120}>
         <BarChart
@@ -36,14 +37,14 @@ export function TypicalMonthChart({ data, monthCount, categoryIcons }: Props) {
         >
           <XAxis
             type="number"
-            tickFormatter={(v) => `€${Math.round(v / 100) * 100}`}
+            tickFormatter={(v) => `${currencySymbol}${Math.round(v / 100) * 100}`}
             tick={{ fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
-            formatter={(v, name) => [formatEuro(Number(v)), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
+            formatter={(v, name) => [formatEuro(Number(v), currencySymbol), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
             contentStyle={{
               background: "var(--bg-tertiary)",
               border: "1px solid var(--border-default)",

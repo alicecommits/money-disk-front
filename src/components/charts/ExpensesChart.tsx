@@ -18,15 +18,17 @@ interface Props {
   scale: Scale;
   averageMode: string;
   categoryIcons: Record<string, string | null>;
+  currencySymbol?: string;
 }
 
 const CustomTooltip = ({
-  active, payload, label, categoryIcons,
+  active, payload, label, categoryIcons, currencySymbol,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
   categoryIcons: Record<string, string | null>;
+  currencySymbol: string;
 }) => {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((s, p) => s + (p.value ?? 0), 0);
@@ -40,18 +42,18 @@ const CustomTooltip = ({
             <CategoryIcon icon={categoryIcons[p.name]} size="sm" />
             <span className="text-text-secondary">{p.name}</span>
           </span>
-          <span className="font-mono text-text-primary">{formatEuro(p.value)}</span>
+          <span className="font-mono text-text-primary">{formatEuro(p.value, currencySymbol)}</span>
         </div>
       ))}
       <div className="mt-2 border-t border-border-subtle pt-2 flex justify-between font-medium">
         <span className="text-text-secondary">Total</span>
-        <span className="font-mono text-accent-primary">{formatEuro(total)}</span>
+        <span className="font-mono text-accent-primary">{formatEuro(total, currencySymbol)}</span>
       </div>
     </div>
   );
 };
 
-export function ExpensesChart({ data, categoryOrder, scale, averageMode, categoryIcons }: Props) {
+export function ExpensesChart({ data, categoryOrder, scale, averageMode, categoryIcons, currencySymbol = "€" }: Props) {
   if (!data.length || data.every((d) => d.value === 0)) {
     return (
       <div className="flex h-64 items-center justify-center text-text-tertiary">
@@ -61,7 +63,7 @@ export function ExpensesChart({ data, categoryOrder, scale, averageMode, categor
   }
 
   const chartData = pivotForRecharts(data, categoryOrder);
-  const yLabel = averageMode !== "Off" ? "Average (€)" : "Amount (€)";
+  const yLabel = averageMode !== "Off" ? `Average (${currencySymbol})` : `Amount (${currencySymbol})`;
 
   return (
     <ResponsiveContainer width="100%" height={480}>
@@ -75,13 +77,13 @@ export function ExpensesChart({ data, categoryOrder, scale, averageMode, categor
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
+          tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
           tick={{ fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
         />
-        <Tooltip content={<CustomTooltip categoryIcons={categoryIcons} />} />
+        <Tooltip content={<CustomTooltip categoryIcons={categoryIcons} currencySymbol={currencySymbol} />} />
         <Legend
           wrapperStyle={{ fontSize: 13, paddingTop: 12 }}
           formatter={(v) => (

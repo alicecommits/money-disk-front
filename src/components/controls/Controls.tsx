@@ -191,3 +191,57 @@ export function ShowInternalToggle({
     </div>
   );
 }
+
+// ── CurrencyToggle ────────────────────────────────────────────────────────────
+
+interface CurrencyToggleProps {
+  value: "EUR" | "GBP";
+  onChange: (v: "EUR" | "GBP") => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}
+
+export function CurrencyToggle({
+  value,
+  onChange,
+  disabled = false,
+  disabledReason,
+}: CurrencyToggleProps) {
+  const isGbp = value === "GBP";
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium uppercase tracking-wider text-text-tertiary">
+        Currency
+      </label>
+      <button
+        onClick={() => !disabled && onChange(isGbp ? "EUR" : "GBP")}
+        disabled={disabled}
+        title={disabled ? disabledReason : undefined}
+        className={
+          "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium " +
+          "transition-colors " +
+          (disabled
+            ? "cursor-help border-border-subtle bg-bg-tertiary/50 text-text-tertiary"
+            : isGbp
+              ? "border-accent-primary bg-accent-primary/10 text-accent-primary"
+              : "border-border-default bg-bg-tertiary text-text-secondary hover:bg-bg-hover")
+        }
+      >
+        <span
+          className={
+            "relative inline-flex h-4 w-7 flex-shrink-0 rounded-full transition-colors " +
+            (isGbp && !disabled ? "bg-accent-primary" : "bg-border-default")
+          }
+        >
+          <span
+            className={
+              "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform " +
+              (isGbp && !disabled ? "translate-x-3.5" : "translate-x-0.5")
+            }
+          />
+        </span>
+        {isGbp ? "GBP (£)" : "EUR (€)"}
+      </button>
+    </div>
+  );
+}
