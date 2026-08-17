@@ -76,7 +76,11 @@ export interface ColumnMapping {
 }
 
 export interface ProcessedTransaction {
-  date_operation: string;
+  // Nullable pre-confirm: the backend coerces unparseable CSV dates to null
+  // (pandas NaT) rather than guessing. Task 5bis's frontend validation is
+  // what keeps a null date from ever reaching the confirmed Transaction,
+  // whose date_operation stays non-null.
+  date_operation: string | null;
   label: string;
   debit: number | null;
   credit: number | null;

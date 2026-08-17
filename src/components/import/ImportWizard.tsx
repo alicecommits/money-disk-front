@@ -8,6 +8,7 @@ import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { PaginationControls } from "../common/PaginationControls";
 import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
 import { RuleModal } from "./RuleModal";
+import { isValidDateOperation } from "../../lib/validation";
 import { getRules, createRule, updateRule, bulkAssignByRule } from "../../api/client";
 import { TRANSACTIONS_KEY, useTransactions } from "../../hooks/useTransactions";
 
@@ -429,6 +430,9 @@ export function ResultsEditor({
 
   const matched   = rows.filter((r) => r.subcategory_id != null).length;
   const unmatched = rows.length - matched;
+  // Counted over ALL rows, not just the current filter/page — a bad date on a
+  // row hidden by "unmatched only" or a search term must still block confirm.
+  const invalidDateCount = rows.filter((r) => !isValidDateOperation(r.date_operation)).length;
 
   const indexed = useMemo(
     () => rows.map((row, originalIndex) => ({ row, originalIndex })),
@@ -486,6 +490,12 @@ export function ResultsEditor({
         </span>
       </div>
 
+      {invalidDateCount > 0 && (
+        <p className="rounded-lg border border-red-900 bg-red-950/30 px-3 py-2 text-sm text-red-400">
+          ⚠️ {invalidDateCount} row{invalidDateCount === 1 ? "" : "s"} {invalidDateCount === 1 ? "has" : "have"} invalid date formats and will be skipped on import
+        </p>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-border-subtle max-h-[50vh]">
         <table className="min-w-full text-xs">
           <thead className="sticky top-0 z-10">
@@ -501,13 +511,22 @@ export function ResultsEditor({
             {pageItems.map(({ row, originalIndex }) => {
               const cat = categories.find((c) => c.name === row.category);
               const isMatched = row.subcategory_id != null;
+              const isValidDate = isValidDateOperation(row.date_operation);
               return (
                 <tr key={originalIndex} className={
                   "border-b border-border-subtle transition-colors " +
                   (isMatched ? "bg-bg-secondary" : "bg-yellow-950/20")
                 }>
-                  <td className="px-3 py-1.5 text-text-secondary whitespace-nowrap font-mono">
-                    {row.date_operation}
+                  <td
+                    className={
+                      "px-3 py-1.5 whitespace-nowrap font-mono " +
+                      (isValidDate
+                        ? "text-text-secondary"
+                        : "rounded border border-red-500 bg-red-950/40 text-red-400")
+                    }
+                    title={isValidDate ? undefined : "Invalid date format — will be skipped on import"}
+                  >
+                    {isValidDate ? row.date_operation : (row.date_operation ?? "—")} {!isValidDate && "⚠️"}
                   </td>
                   <td className="px-3 py-1.5 text-text-primary max-w-[280px] truncate" title={row.label}>
                     {row.label}
@@ -587,7 +606,8 @@ export function ResultsEditor({
 
       <button
         onClick={onConfirm}
-        disabled={loading}
+        disabled={loading || invalidDateCount > 0}
+        title={invalidDateCount > 0 ? "Fix or remove rows with invalid dates before importing" : undefined}
         className="w-full rounded-lg py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ background: "var(--accent-gradient)" }}
       >
@@ -631,7 +651,7 @@ export function ResultsEditor({
         title="Skip this transaction?"
         description={
           confirmSkip.target
-            ? `${confirmSkip.target.row.date_operation} · ${confirmSkip.target.row.label} · €${(confirmSkip.target.row.debit ?? confirmSkip.target.row.credit ?? 0).toFixed(2)}`
+            ? `${confirmSkip.target.row.date_operation ?? "(invalid date)"} · ${confirmSkip.target.row.label} · €${(confirmSkip.target.row.debit ?? confirmSkip.target.row.credit ?? 0).toFixed(2)}`
             : ""
         }
         body="This transaction will not be imported into the database. You can always re-import it later from the original CSV."
