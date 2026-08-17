@@ -11,12 +11,13 @@ interface Props {
   scale: Scale;
   averageMode: string;
   categoryIcons: Record<string, string | null>;
+  currencySymbol?: string;
 }
 
 // Income uses green-tinted colors
 const INCOME_COLORS = ["#22c55e", "#06b6d4", "#a78bfa", "#f59e0b"];
 
-export function IncomeChart({ data, categoryOrder, scale, averageMode, categoryIcons }: Props) {
+export function IncomeChart({ data, categoryOrder, scale, averageMode, categoryIcons, currencySymbol = "€" }: Props) {
   if (!data.length || data.every((d) => d.value === 0)) {
     return (
       <div className="flex h-48 items-center justify-center text-text-tertiary">
@@ -26,7 +27,7 @@ export function IncomeChart({ data, categoryOrder, scale, averageMode, categoryI
   }
 
   const chartData = pivotForRecharts(data, categoryOrder);
-  const yLabel = averageMode !== "Off" ? "Average (€)" : "Amount (€)";
+  const yLabel = averageMode !== "Off" ? `Average (${currencySymbol})` : `Amount (${currencySymbol})`;
 
   return (
     <ResponsiveContainer width="100%" height={360}>
@@ -40,14 +41,14 @@ export function IncomeChart({ data, categoryOrder, scale, averageMode, categoryI
           tickLine={false}
         />
         <YAxis
-          tickFormatter={(v) => `€${(v / 1000).toFixed(0)}k`}
+          tickFormatter={(v) => `${currencySymbol}${(v / 1000).toFixed(0)}k`}
           tick={{ fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 10, fontSize: 11 }}
         />
         <Tooltip
-          formatter={(v, name) => [formatEuro(Number(v)), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
+          formatter={(v, name) => [formatEuro(Number(v), currencySymbol), categoryOptionLabel(categoryIcons[String(name)], String(name))]}
           contentStyle={{
             background: "var(--bg-tertiary)",
             border: "1px solid var(--border-default)",
