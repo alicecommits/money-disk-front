@@ -61,7 +61,7 @@ export function Admin() {
             </div>
             <div>
               <h3 className="mb-3 text-sm font-medium text-text-secondary">Column Mapping</h3>
-              <ColumnMapper columns={w.preview.columns} onSubmit={w.processMapping} loading={w.processLoading} error={w.processError as Error | null} />
+              <ColumnMapper columns={w.preview.columns} previewRows={w.preview.preview as Record<string, unknown>[]} onSubmit={w.processMapping} loading={w.processLoading} error={w.processError as Error | null} />
             </div>
           </div>
         )}

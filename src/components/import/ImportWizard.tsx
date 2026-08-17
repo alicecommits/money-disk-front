@@ -9,6 +9,12 @@ import { PaginationControls } from "../common/PaginationControls";
 import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
 import { RuleModal } from "./RuleModal";
 import { isValidDateOperation } from "../../lib/validation";
+import {
+  validateDateColumn,
+  validateAmountColumn,
+  type DateColumnValidation,
+  type AmountColumnValidation,
+} from "../../lib/importValidation";
 import { getRules, createRule, updateRule, bulkAssignByRule } from "../../api/client";
 import { TRANSACTIONS_KEY, useTransactions } from "../../hooks/useTransactions";
 
@@ -140,16 +146,57 @@ export function PreviewTable({ columns, rows }: PreviewTableProps) {
   );
 }
 
+// ── ColumnMapper validation hints ──────────────────────────────────────────────
+
+function DateValidationHint({ validation }: { validation: DateColumnValidation }) {
+  return (
+    <div className="mt-1 space-y-0.5">
+      <p className="text-xs italic text-text-tertiary">
+        Expected format: DD/MM/YYYY — dates will be stored as YYYY-MM-DD
+      </p>
+      {validation.level === "green" && (
+        <p className="text-xs text-green-400">{validation.message}</p>
+      )}
+      {validation.level === "red" && (
+        <div className="text-xs text-red-400">
+          <p>{validation.message}</p>
+          {validation.rawSamples && validation.rawSamples.length > 0 && (
+            <p className="text-text-tertiary">Sample values: {validation.rawSamples.join(", ")}</p>
+          )}
+        </div>
+      )}
+      {/* HINT: the grey italic line above is the only thing shown — no extra indicator. */}
+    </div>
+  );
+}
+
+function AmountValidationHint({ validation }: { validation: AmountColumnValidation }) {
+  if (validation.level === "silent") return null;
+  const colorCls =
+    validation.level === "green" ? "text-green-400"
+    : validation.level === "amber" ? "text-yellow-400"
+    : "text-red-400";
+  return (
+    <div className={"mt-1 text-xs " + colorCls}>
+      <p>{validation.message}</p>
+      {validation.rawSamples && validation.rawSamples.length > 0 && (
+        <p className="text-text-tertiary">Unparsed values: {validation.rawSamples.join(", ")}</p>
+      )}
+    </div>
+  );
+}
+
 // ── ColumnMapper ──────────────────────────────────────────────────────────────
 
 interface ColumnMapperProps {
   columns: string[];
+  previewRows: Record<string, unknown>[];
   onSubmit: (mapping: ColumnMapping) => void;
   loading: boolean;
   error?: Error | null;
 }
 
-export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapperProps) {
+export function ColumnMapper({ columns, previewRows, onSubmit, loading, error }: ColumnMapperProps) {
   const [dateCol, setDateCol]         = useState(columns[0] ?? "");
   const [labelCols, setLabelCols]     = useState<string[]>([columns[1] ?? ""].filter(Boolean));
   const [amountMode, setAmountMode]   = useState<"separate" | "combined">("separate");
@@ -165,6 +212,32 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
       prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]
     );
   }
+
+  const dateValidation = useMemo(
+    () => validateDateColumn(previewRows, dateCol),
+    [previewRows, dateCol],
+  );
+  const debitValidation = useMemo(
+    () => validateAmountColumn(previewRows, debitCol, "separate"),
+    [previewRows, debitCol],
+  );
+  const creditValidation = useMemo(
+    () => validateAmountColumn(previewRows, creditCol, "separate"),
+    [previewRows, creditCol],
+  );
+  const combinedValidation = useMemo(
+    () => validateAmountColumn(previewRows, amountCol, "combined"),
+    [previewRows, amountCol],
+  );
+
+  // Next is blocked by a RED state anywhere; AMBER/GREEN/HINT never block —
+  // only the mode currently in use contributes (e.g. debit/credit RED is
+  // irrelevant while amountMode is "combined").
+  const hasRedError =
+    dateValidation.level === "red" ||
+    (amountMode === "separate" &&
+      (debitValidation.level === "red" || creditValidation.level === "red")) ||
+    (amountMode === "combined" && combinedValidation.level === "red");
 
   function handleSubmit() {
     const mapping: ColumnMapping = {
@@ -190,6 +263,7 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
           <select className={selectCls} value={dateCol} onChange={(e) => setDateCol(e.target.value)}>
             {columns.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          <DateValidationHint validation={dateValidation} />
         </div>
 
         <div>
@@ -252,6 +326,7 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
               <option value="">— none —</option>
               {columns.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            <AmountValidationHint validation={debitValidation} />
           </div>
           <div>
             <label className={labelCls}>Credit column</label>
@@ -259,6 +334,7 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
               <option value="">— none —</option>
               {columns.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+            <AmountValidationHint validation={creditValidation} />
           </div>
         </div>
       ) : (
@@ -268,6 +344,10 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
             <option value="">— select —</option>
             {columns.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
+          <p className="mt-1 text-xs italic text-text-tertiary">
+            Negative values → stored as debit (absolute value), positive → credit
+          </p>
+          <AmountValidationHint validation={combinedValidation} />
         </div>
       )}
 
@@ -297,7 +377,8 @@ export function ColumnMapper({ columns, onSubmit, loading, error }: ColumnMapper
 
       <button
         onClick={handleSubmit}
-        disabled={loading || !dateCol || !labelCols.length}
+        disabled={loading || !dateCol || !labelCols.length || hasRedError}
+        title={hasRedError ? "Fix the highlighted column selection before continuing" : undefined}
         className="w-full rounded-lg py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         style={{ background: "var(--accent-gradient)" }}
       >
