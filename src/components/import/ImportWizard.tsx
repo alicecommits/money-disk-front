@@ -1,11 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Category, ColumnMapping, ProcessedTransaction } from "../../types";
 import { categoryOptionLabel } from "../categories/CategoryIcon";
 import { usePagination } from "../../hooks/usePagination";
 import { useConfirmDelete } from "../../hooks/useConfirmDelete";
 import { PaginationControls } from "../common/PaginationControls";
 import { ConfirmDeleteModal } from "../ui/ConfirmDeleteModal";
+import { RuleModal } from "./RuleModal";
+import { getRules, createRule, updateRule, bulkAssignByRule } from "../../api/client";
+import { TRANSACTIONS_KEY, useTransactions } from "../../hooks/useTransactions";
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -314,12 +318,38 @@ interface ResultsEditorProps {
   stats: { total: number; matched: number; unmatched: number } | null;
 }
 
+interface PendingRuleReassign {
+  index: number;
+  row: ProcessedTransaction;
+  subId: number;
+  subName: string;
+  categoryName: string;
+}
+
 export function ResultsEditor({
   rows, categories, onUpdateRow, onRemoveRow, onConfirm, loading,
 }: ResultsEditorProps) {
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [search, setSearch] = useState("");
   const confirmSkip = useConfirmDelete<{ row: ProcessedTransaction; originalIndex: number }>();
+
+  const queryClient = useQueryClient();
+  const rulesQ = useQuery({ queryKey: ["rules"], queryFn: getRules });
+  const transactionsQ = useTransactions();
+
+  const [ruleReassignTarget, setRuleReassignTarget] = useState<PendingRuleReassign | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  type RuleSavePayload = { pattern: string; is_regex: boolean; subcategory_id: number; priority?: number };
+
+  const reassignMutation = useMutation({
+    mutationFn: async ({ ruleId, payload }: { ruleId: number; payload: RuleSavePayload }) => {
+      await updateRule(ruleId, payload);
+      return bulkAssignByRule(ruleId, payload.subcategory_id);
+    },
+  });
+
+  const createRuleMutation = useMutation({ mutationFn: createRule });
 
   function handleCategoryChange(index: number, catName: string) {
     const cat = categories.find((c) => c.name === catName);
@@ -333,11 +363,68 @@ export function ResultsEditor({
     });
   }
 
+  // Entry point B: fires whenever the subcategory dropdown actually changes.
+  // B1 (row.matched_rule_id set) — offer "just this one" vs "this one + all past matches".
+  // B2 (no matched_rule_id) — offer "create rule + apply to this row".
   function handleSubcategoryChange(index: number, row: ProcessedTransaction, subId: number) {
-    const cat   = categories.find((c) => c.name === row.category);
-    const sub   = cat?.subcategories.find((s) => s.id === subId);
-    if (!sub) return;
-    onUpdateRow(index, { subcategory: sub.name, subcategory_id: sub.id, assignment_method: "manual" });
+    const cat = categories.find((c) => c.name === row.category);
+    const sub = cat?.subcategories.find((s) => s.id === subId);
+    if (!sub || !cat || subId === row.subcategory_id) return;
+    setRuleReassignTarget({ index, row, subId, subName: sub.name, categoryName: cat.name });
+  }
+
+  const patternEditable = ruleReassignTarget ? ruleReassignTarget.row.matched_rule_id == null : false;
+
+  const matchedRule = ruleReassignTarget && !patternEditable
+    ? rulesQ.data?.find((r) => r.id === ruleReassignTarget.row.matched_rule_id)
+    : undefined;
+
+  const matchedCount = ruleReassignTarget
+    ? (transactionsQ.data?.filter((t) => t.matched_rule_id === ruleReassignTarget.row.matched_rule_id).length ?? 0)
+    : 0;
+
+  // B1 not ready to render until the matched rule has loaded.
+  const modalReady = ruleReassignTarget != null && (patternEditable || matchedRule != null);
+
+  function applyJustThisOne() {
+    if (!ruleReassignTarget) return;
+    const { index, subId, subName } = ruleReassignTarget;
+    onUpdateRow(index, { subcategory: subName, subcategory_id: subId, assignment_method: "manual" });
+    setRuleReassignTarget(null);
+  }
+
+  function cancelRuleModal() {
+    setRuleReassignTarget(null);
+  }
+
+  async function saveRule(payload: RuleSavePayload) {
+    if (!ruleReassignTarget) return;
+    const { index, row } = ruleReassignTarget;
+    const cat = categories.find((c) => c.subcategories.some((s) => s.id === payload.subcategory_id));
+    const sub = cat?.subcategories.find((s) => s.id === payload.subcategory_id);
+    if (!cat || !sub) return;
+
+    if (row.matched_rule_id != null) {
+      // B1 — update the existing rule and bulk-reassign its past matches.
+      const result = await reassignMutation.mutateAsync({ ruleId: row.matched_rule_id, payload });
+      onUpdateRow(index, { category: cat.name, subcategory: sub.name, subcategory_id: sub.id, assignment_method: "manual" });
+      await queryClient.invalidateQueries({ queryKey: ["rules"] });
+      await queryClient.invalidateQueries({ queryKey: TRANSACTIONS_KEY });
+      setSuccessMsg(`Rule updated · ${result.updated} past transactions reassigned`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } else {
+      // B2 — create a new rule, apply it to this row only (no bulk reassign, nothing past to reassign).
+      const newRule = await createRuleMutation.mutateAsync(payload);
+      onUpdateRow(index, {
+        category: cat.name,
+        subcategory: sub.name,
+        subcategory_id: sub.id,
+        assignment_method: "manual",
+        matched_rule_id: newRule.id,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["rules"] });
+    }
+    setRuleReassignTarget(null);
   }
 
   const matched   = rows.filter((r) => r.subcategory_id != null).length;
@@ -492,6 +579,12 @@ export function ResultsEditor({
         />
       )}
 
+      {successMsg && (
+        <p className="rounded-lg border border-green-900 bg-green-950/30 px-3 py-2 text-sm text-green-400">
+          {successMsg}
+        </p>
+      )}
+
       <button
         onClick={onConfirm}
         disabled={loading}
@@ -500,6 +593,37 @@ export function ResultsEditor({
       >
         {loading ? "Importing…" : `Confirm Import (${rows.length} transactions)`}
       </button>
+
+      {modalReady && ruleReassignTarget && (
+        <RuleModal
+          isOpen
+          patternEditable={patternEditable}
+          rule={
+            patternEditable
+              ? {
+                  pattern: ruleReassignTarget.row.label,
+                  is_regex: false,
+                  category: ruleReassignTarget.categoryName,
+                  subcategory_id: ruleReassignTarget.subId,
+                }
+              : {
+                  pattern: matchedRule?.pattern ?? "",
+                  is_regex: matchedRule?.is_regex ?? false,
+                  category: ruleReassignTarget.categoryName,
+                  subcategory_id: ruleReassignTarget.subId,
+                  ...(matchedRule?.priority != null ? { priority: matchedRule.priority } : {}),
+                }
+          }
+          categories={categories}
+          currentAssignmentLabel={`${ruleReassignTarget.row.category} / ${ruleReassignTarget.row.subcategory}`}
+          matchedCount={matchedCount}
+          loading={patternEditable ? createRuleMutation.isPending : reassignMutation.isPending}
+          error={patternEditable ? createRuleMutation.error : reassignMutation.error}
+          onJustThisOne={applyJustThisOne}
+          onSave={saveRule}
+          onCancel={cancelRuleModal}
+        />
+      )}
 
       <ConfirmDeleteModal
         isOpen={confirmSkip.isOpen}
